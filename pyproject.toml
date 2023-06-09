@@ -28,5 +28,11 @@ version = "0.0.1"
 [tool.setuptools]
 packages = ["fuo"]
 
+[tool.setuptools.package-data]
+fuo = ["*.ini"]
+
+[tool.setuptools.exclude-package-data]
+fuo = [".gitignore"]
+
 [project.scripts]
 fuo-bot = "fuo.main:main"
