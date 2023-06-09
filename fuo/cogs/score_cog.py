@@ -10,7 +10,7 @@ from discord.ext import commands
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
-from fuo import config, db, model, utils
+from fuo import config, db, models, utils
 
 _logger = logging.getLogger(__name__)
 
@@ -20,13 +20,13 @@ class ScoreCog(commands.Cog, name="score"):
         self.bot = bot
 
         self.score_configs: DefaultDict[
-            model.ScoreSource, DefaultDict[int | Tuple[int, int], float]
+            models.ScoreSource, DefaultDict[int | Tuple[int, int], float]
         ] = defaultdict(lambda: defaultdict(lambda: 1.0))
 
     async def _get_bonus(
         self,
         guild_id: int,
-        score_src: model.ScoreSource,
+        score_src: models.ScoreSource,
         channel_id: Optional[int] = None,
         *,
         sess: AsyncSession | None = None,
@@ -43,12 +43,12 @@ class ScoreCog(commands.Cog, name="score"):
             return score_config[score_key]
         else:
             q = (
-                sa.select(model.ScoreConfig)
-                .where(model.ScoreConfig.guild_id == guild_id)
-                .where(model.ScoreConfig.score_src == score_src)
+                sa.select(models.ScoreConfig)
+                .where(models.ScoreConfig.guild_id == guild_id)
+                .where(models.ScoreConfig.score_src == score_src)
             )
             if channel_id is not None:
-                q = q.where(model.ScoreConfig.channel_id == channel_id)
+                q = q.where(models.ScoreConfig.channel_id == channel_id)
             conf = (await sess.execute(q)).scalar_one_or_none()
             if conf is not None:
                 score = conf.score
@@ -63,22 +63,22 @@ class ScoreCog(commands.Cog, name="score"):
         guild_id: int,
         member_id: int,
         score: float,
-        score_type: model.ScoreType,
+        score_type: models.ScoreType,
         *,
         sess: AsyncSession | None = None,
     ):
         assert sess is not None
         q = (
-            sa.select(model.UserScore)
-            .where(model.UserScore.guild_id == guild_id)
-            .where(model.UserScore.member_id == member_id)
-            .where(model.UserScore.score_type == score_type)
+            sa.select(models.UserScore)
+            .where(models.UserScore.guild_id == guild_id)
+            .where(models.UserScore.member_id == member_id)
+            .where(models.UserScore.score_type == score_type)
         )
         record = (await sess.execute(q)).scalar_one_or_none()
         if record is not None:
             record.score += score
         else:
-            record = model.UserScore(
+            record = models.UserScore(
                 guild_id=guild_id,
                 member_id=member_id,
                 score=score,
@@ -94,13 +94,13 @@ class ScoreCog(commands.Cog, name="score"):
         assert sess is not None
 
         score = await self._get_bonus(
-            guild_id=guild_id, score_src=model.ScoreSource.POST, sess=sess
+            guild_id=guild_id, score_src=models.ScoreSource.POST, sess=sess
         )
         await self._add_member_score(
             guild_id=guild_id,
             member_id=member_id,
             score=score,
-            score_type=model.ScoreType.POST,
+            score_type=models.ScoreType.POST,
             sess=sess,
         )
         _logger.info(f"add {score} post score to member {member_id}")
@@ -112,13 +112,13 @@ class ScoreCog(commands.Cog, name="score"):
         assert sess is not None
 
         score = await self._get_bonus(
-            guild_id=guild_id, score_src=model.ScoreSource.POST_REACTION, sess=sess
+            guild_id=guild_id, score_src=models.ScoreSource.POST_REACTION, sess=sess
         )
         await self._add_member_score(
             guild_id=guild_id,
             member_id=member_id,
             score=score,
-            score_type=model.ScoreType.POST,
+            score_type=models.ScoreType.POST,
             sess=sess,
         )
         _logger.info(f"add {score} post reaction score to member {member_id}")
@@ -136,7 +136,7 @@ class ScoreCog(commands.Cog, name="score"):
 
         score = await self._get_bonus(
             guild_id=guild_id,
-            score_src=model.ScoreSource.CHAT,
+            score_src=models.ScoreSource.CHAT,
             channel_id=channel_id,
             sess=sess,
         )
@@ -144,7 +144,7 @@ class ScoreCog(commands.Cog, name="score"):
             guild_id=guild_id,
             member_id=member_id,
             score=score,
-            score_type=model.ScoreType.CHAT,
+            score_type=models.ScoreType.CHAT,
             sess=sess,
         )
         _logger.info(f"add {score} chat score to member {member_id}")
@@ -162,7 +162,7 @@ class ScoreCog(commands.Cog, name="score"):
 
         score = await self._get_bonus(
             guild_id=guild_id,
-            score_src=model.ScoreSource.CHAT_REACTION,
+            score_src=models.ScoreSource.CHAT_REACTION,
             channel_id=channel_id,
             sess=sess,
         )
@@ -170,7 +170,7 @@ class ScoreCog(commands.Cog, name="score"):
             guild_id=guild_id,
             member_id=member_id,
             score=score,
-            score_type=model.ScoreType.CHAT,
+            score_type=models.ScoreType.CHAT,
             sess=sess,
         )
         _logger.info(f"add {score} chat reaction score to member {member_id}")
@@ -186,13 +186,13 @@ class ScoreCog(commands.Cog, name="score"):
         assert sess is not None
 
         score = await self._get_bonus(
-            guild_id=guild_id, score_src=model.ScoreSource.QUESTION, sess=sess
+            guild_id=guild_id, score_src=models.ScoreSource.QUESTION, sess=sess
         )
         await self._add_member_score(
             guild_id=guild_id,
             member_id=member_id,
             score=score,
-            score_type=model.ScoreType.QUESTION,
+            score_type=models.ScoreType.QUESTION,
             sess=sess,
         )
         _logger.info(f"add {score} question score to member {member_id}")
@@ -210,10 +210,10 @@ class ScoreCog(commands.Cog, name="score"):
         assert sess is not None
 
         answer_score = await self._get_bonus(
-            guild_id=guild_id, score_src=model.ScoreSource.ANSWER, sess=sess
+            guild_id=guild_id, score_src=models.ScoreSource.ANSWER, sess=sess
         )
         answer_reation_score_base = await self._get_bonus(
-            guild_id=guild_id, score_src=model.ScoreSource.ANSWER_REACTION, sess=sess
+            guild_id=guild_id, score_src=models.ScoreSource.ANSWER_REACTION, sess=sess
         )
         answer_reaction_score = answer_reation_score_base * (like - dislike)
 
@@ -222,7 +222,7 @@ class ScoreCog(commands.Cog, name="score"):
             guild_id=guild_id,
             member_id=member_id,
             score=score,
-            score_type=model.ScoreType.QUESTION,
+            score_type=models.ScoreType.QUESTION,
             sess=sess,
         )
         _logger.info(f"add {score} answer score to member {member_id}")
@@ -237,14 +237,14 @@ class ScoreCog(commands.Cog, name="score"):
         self,
         ctx: commands.Context,
         member: discord.Member,
-        score_type: Annotated[model.ScoreType, utils.to_score_type],
+        score_type: Annotated[models.ScoreType, utils.to_score_type],
     ):
         async with db.session_scope() as sess:
             q = (
-                sa.select(model.UserScore)
-                .where(model.UserScore.guild_id == member.guild.id)
-                .where(model.UserScore.member_id == member.id)
-                .where(model.UserScore.score_type == score_type)
+                sa.select(models.UserScore)
+                .where(models.UserScore.guild_id == member.guild.id)
+                .where(models.UserScore.member_id == member.id)
+                .where(models.UserScore.score_type == score_type)
             )
             user_score = (await sess.execute(q)).scalar_one_or_none()
             if user_score is None:
@@ -264,7 +264,7 @@ class ScoreCog(commands.Cog, name="score"):
         self,
         ctx: commands.Context,
         member: discord.Member,
-        score_type: Annotated[model.ScoreType, utils.to_score_type],
+        score_type: Annotated[models.ScoreType, utils.to_score_type],
         score: float,
     ):
         await self._add_member_score(

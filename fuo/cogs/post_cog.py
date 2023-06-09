@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import discord
 from discord.ext import commands
 
-from fuo import model, utils
+from fuo import models, utils
 
 from .channel_cog import ChannelCog
 from .score_cog import ScoreCog
@@ -35,7 +35,7 @@ class PostCog(commands.Cog, name="post"):
         return await channel_cog.check_channel_type(
             guild_id=guild_id,
             channel_id=channel_id,
-            channel_type=model.ChannelType.POST,
+            channel_type=models.ChannelType.POST,
         )
 
     @commands.Cog.listener(name="on_message")

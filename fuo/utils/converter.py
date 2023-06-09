@@ -1,19 +1,19 @@
 from discord.ext.commands import BadArgument
 
-from fuo import model
+from fuo import models
 
 
-def to_score_type(s: str) -> model.ScoreType:
+def to_score_type(s: str) -> models.ScoreType:
     try:
-        res = model.ScoreType[s.upper()]
+        res = models.ScoreType[s.upper()]
     except KeyError:
         raise BadArgument(f"{s} is not a valid score type.")
     return res
 
 
-def to_channel_type(s: str) -> model.ChannelType:
+def to_channel_type(s: str) -> models.ChannelType:
     try:
-        res = model.ChannelType[s.upper()]
+        res = models.ChannelType[s.upper()]
     except KeyError:
         raise BadArgument(f"{s} is not a valid channel type.")
     return res

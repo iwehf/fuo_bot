@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from discord.ext import commands
 from typing_extensions import Annotated
 
-from fuo import db, model, utils, config
+from fuo import db, models, utils, config
 
 _logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class ChannelCog(commands.Cog, name="channel"):
         self,
         ctx: commands.Context,
         channel: discord.TextChannel,
-        channel_type: Annotated[model.ChannelType, utils.to_channel_type],
+        channel_type: Annotated[models.ChannelType, utils.to_channel_type],
     ):
         assert ctx.guild is not None
         guild_id = ctx.guild.id
@@ -36,20 +36,20 @@ class ChannelCog(commands.Cog, name="channel"):
 
         async with db.session_scope() as sess:
             q = (
-                sa.select(model.ChannelConfig)
-                .where(model.ChannelConfig.guild_id == guild_id)
-                .where(model.ChannelConfig.channel_id == channel_id)
-                .where(model.ChannelConfig.channel_type == channel_type)
+                sa.select(models.ChannelConfig)
+                .where(models.ChannelConfig.guild_id == guild_id)
+                .where(models.ChannelConfig.channel_id == channel_id)
+                .where(models.ChannelConfig.channel_type == channel_type)
             )
             channel_conf = (await sess.execute(q)).scalar_one_or_none()
             if (
                 channel_conf is not None
                 and channel_conf.channel_id != channel_id
-                and channel_type in [model.ChannelType.POST, model.ChannelType.QUESTION]
+                and channel_type in [models.ChannelType.POST, models.ChannelType.QUESTION]
             ):
                 channel_conf.channel_id = channel_id
             else:
-                channel_conf = model.ChannelConfig(
+                channel_conf = models.ChannelConfig(
                     guild_id=guild_id,
                     channel_id=channel_id,
                     channel_type=channel_type,
@@ -67,7 +67,7 @@ class ChannelCog(commands.Cog, name="channel"):
         self,
         ctx: commands.Context,
         channel: discord.TextChannel,
-        channel_type: Annotated[model.ChannelType, utils.to_channel_type],
+        channel_type: Annotated[models.ChannelType, utils.to_channel_type],
     ):
         assert ctx.guild is not None
         guild_id = ctx.guild.id
@@ -75,10 +75,10 @@ class ChannelCog(commands.Cog, name="channel"):
 
         async with db.session_scope() as sess:
             q = (
-                sa.select(model.ChannelConfig)
-                .where(model.ChannelConfig.guild_id == guild_id)
-                .where(model.ChannelConfig.channel_id == channel_id)
-                .where(model.ChannelConfig.channel_type == channel_type)
+                sa.select(models.ChannelConfig)
+                .where(models.ChannelConfig.guild_id == guild_id)
+                .where(models.ChannelConfig.channel_id == channel_id)
+                .where(models.ChannelConfig.channel_type == channel_type)
             )
             channel_conf = (await sess.execute(q)).scalar_one_or_none()
             if channel_conf is not None:
@@ -97,9 +97,9 @@ class ChannelCog(commands.Cog, name="channel"):
 
         async with db.session_scope() as sess:
             q = (
-                sa.select(model.ChannelConfig)
-                .where(model.ChannelConfig.guild_id == guild_id)
-                .where(model.ChannelConfig.channel_id == channel_id)
+                sa.select(models.ChannelConfig)
+                .where(models.ChannelConfig.guild_id == guild_id)
+                .where(models.ChannelConfig.channel_id == channel_id)
             )
             channel_confs = (await sess.execute(q)).scalars().all()
             if len(channel_confs) > 0:
@@ -108,14 +108,14 @@ class ChannelCog(commands.Cog, name="channel"):
                 await ctx.send(f"channel {channel.name} types: {channel_type_str}")
 
     async def check_channel_type(
-        self, guild_id: int, channel_id: int, channel_type: model.ChannelType
+        self, guild_id: int, channel_id: int, channel_type: models.ChannelType
     ) -> bool:
         async with db.session_scope() as sess:
             q = (
-                sa.select(sa.func.count(model.ChannelConfig.id))
-                .where(model.ChannelConfig.guild_id == guild_id)
-                .where(model.ChannelConfig.channel_id == channel_id)
-                .where(model.ChannelConfig.channel_type == channel_type)
+                sa.select(sa.func.count(models.ChannelConfig.id))
+                .where(models.ChannelConfig.guild_id == guild_id)
+                .where(models.ChannelConfig.channel_id == channel_id)
+                .where(models.ChannelConfig.channel_type == channel_type)
             )
 
             count = (await sess.execute(q)).scalar_one()

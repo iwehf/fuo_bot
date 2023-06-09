@@ -5,7 +5,7 @@ import logging
 import discord
 from discord.ext import commands
 
-from fuo import model, utils
+from fuo import models, utils
 
 from .channel_cog import ChannelCog
 from .score_cog import ScoreCog
@@ -34,7 +34,7 @@ class ChatCog(commands.Cog, name="chat"):
         return await channel_cog.check_channel_type(
             guild_id=guild_id,
             channel_id=channel_id,
-            channel_type=model.ChannelType.CHAT,
+            channel_type=models.ChannelType.CHAT,
         )
 
     @commands.Cog.listener(name="on_message")

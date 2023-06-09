@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from discord.ext import commands
 from tabulate import tabulate
 
-from fuo import db, model, utils, config
+from fuo import db, models, utils, config
 
 from .channel_cog import ChannelCog
 from .score_cog import ScoreCog
@@ -28,7 +28,7 @@ class QuestionMissing(commands.CommandError):
     pass
 
 
-def question_summary(guild: discord.Guild, question: model.Question) -> str:
+def question_summary(guild: discord.Guild, question: models.Question) -> str:
     rows = []
     for answer in question.answers:
         member = guild.get_member(answer.member_id)
@@ -75,7 +75,7 @@ class QuestionCog(commands.Cog, name="question"):
         return await channel_cog.check_channel_type(
             guild_id=guild_id,
             channel_id=channel_id,
-            channel_type=model.ChannelType.QUESTION,
+            channel_type=models.ChannelType.QUESTION,
         )
 
     async def cog_check(self, ctx: commands.Context) -> bool:
@@ -100,10 +100,10 @@ class QuestionCog(commands.Cog, name="question"):
 
         async with db.session_scope() as sess:
             q = (
-                sa.select(model.Question)
-                .where(model.Question.guild_id == guild_id)
-                .where(model.Question.channel_id == channel_id)
-                .order_by(sa.desc(model.Question.id))
+                sa.select(models.Question)
+                .where(models.Question.guild_id == guild_id)
+                .where(models.Question.channel_id == channel_id)
+                .order_by(sa.desc(models.Question.id))
                 .limit(1)
             )
 
@@ -111,7 +111,7 @@ class QuestionCog(commands.Cog, name="question"):
             if last_question is not None and last_question.opened:
                 raise QuestionNotFinished
 
-            question = model.Question(
+            question = models.Question(
                 guild_id=guild_id,
                 member_id=member_id,
                 channel_id=channel_id,
@@ -144,10 +144,10 @@ class QuestionCog(commands.Cog, name="question"):
 
         async with db.session_scope() as sess:
             q = (
-                sa.select(model.Question)
-                .where(model.Question.guild_id == guild_id)
-                .where(model.Question.channel_id == channel_id)
-                .order_by(sa.desc(model.Question.id))
+                sa.select(models.Question)
+                .where(models.Question.guild_id == guild_id)
+                .where(models.Question.channel_id == channel_id)
+                .order_by(sa.desc(models.Question.id))
                 .limit(1)
             )
 
@@ -157,7 +157,7 @@ class QuestionCog(commands.Cog, name="question"):
             if not question.opened:
                 raise QuestionFinished
 
-            answer = model.Answer(
+            answer = models.Answer(
                 guild_id=guild_id,
                 member_id=member_id,
                 channel_id=channel_id,
@@ -195,10 +195,10 @@ class QuestionCog(commands.Cog, name="question"):
 
         async with db.session_scope() as sess:
             q = (
-                sa.select(model.Question)
-                .where(model.Question.guild_id == guild_id)
-                .where(model.Question.channel_id == channel_id)
-                .order_by(sa.desc(model.Question.id))
+                sa.select(models.Question)
+                .where(models.Question.guild_id == guild_id)
+                .where(models.Question.channel_id == channel_id)
+                .order_by(sa.desc(models.Question.id))
                 .limit(1)
             )
 
@@ -263,10 +263,10 @@ class QuestionCog(commands.Cog, name="question"):
             ):
                 async with db.session_scope() as sess:
                     q = (
-                        sa.select(model.Answer)
-                        .where(model.Answer.guild_id == payload.guild_id)
-                        .where(model.Answer.channel_id == payload.channel_id)
-                        .where(model.Answer.message_id == payload.message_id)
+                        sa.select(models.Answer)
+                        .where(models.Answer.guild_id == payload.guild_id)
+                        .where(models.Answer.channel_id == payload.channel_id)
+                        .where(models.Answer.message_id == payload.message_id)
                     )
 
                     answer = (await sess.execute(q)).scalar_one_or_none()
