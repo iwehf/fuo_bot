@@ -25,8 +25,8 @@ dependencies = [
 ]
 version = "0.0.1"
 
-[tool.setuptools]
-packages = ["fuo"]
+[tool.setuptools.packages.find]
+include = ["fuo*"]
 
 [tool.setuptools.package-data]
 fuo = ["*.ini"]
