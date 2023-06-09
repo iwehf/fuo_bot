@@ -1,46 +1,21 @@
-import asyncio
-import logging
+import argparse
+from typing import Optional, Sequence
 
-import discord
-from discord.ext import commands
-
-from fuo import cogs, config, db, log
-
-_logger = logging.getLogger(__name__)
+from fuo.bot import run_bot
+from fuo.migrations import run_migrations
 
 
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
-intents.reactions = True
-
-bot = commands.Bot(command_prefix="%", intents=intents)
-
-
-@bot.event
-async def on_ready():
-    _logger.info(f"bot is ready!")
-
-
-async def run():
-    log.init()
-    await db.init()
-    try:
-        async with bot:
-            await bot.add_cog(cogs.RoleCog(bot))
-            await bot.add_cog(cogs.ScoreCog(bot))
-            await bot.add_cog(cogs.ChannelCog(bot))
-            await bot.add_cog(cogs.PostCog(bot))
-            await bot.add_cog(cogs.QuestionCog(bot))
-            await bot.add_cog(cogs.ChatCog(bot))
-
-            await bot.start(config.discord_token)
-    finally:
-        await db.close()
-
-
-def main():
-    try:
-        asyncio.run(run())
-    except KeyboardInterrupt:
-        pass
+def main(input_args: Optional[Sequence[str]] = None):
+    parser = argparse.ArgumentParser(description="FUO discord bot", prog="fuo-bot")
+    parser.add_argument(
+        "action",
+        choices=["run", "migrate"],
+        help="FUO bot actions:\n"
+        "run: start the bot\n"
+        "migrate: upgrade database to the latest",
+    )
+    args = parser.parse_args(input_args)
+    if args.action == "run":
+        run_bot()
+    elif args.action == "migrate":
+        run_migrations()
