@@ -49,7 +49,7 @@ def question_summary(guild: discord.Guild, question: model.Question) -> str:
         "Here are the answers' details:\n"
     )
 
-    res += table
+    res += f"```\n{table}\n```"
 
     return res
 
