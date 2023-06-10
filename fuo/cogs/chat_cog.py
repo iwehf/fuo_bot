@@ -47,9 +47,13 @@ class ChatCog(commands.Cog, name="chat"):
             member_id = message.author.id
             channel_id = message.channel.id
 
-            if not await utils.is_command(
-                self.bot, message
-            ) and await self._in_chat_channel(guild_id=guild_id, channel_id=channel_id):
+            if (
+                not utils.is_bot(self.bot, message)
+                and not await utils.is_command(self.bot, message)
+                and await self._in_chat_channel(
+                    guild_id=guild_id, channel_id=channel_id
+                )
+            ):
                 score_cog = self._get_score_cog()
                 await score_cog.chat_score(
                     guild_id=guild_id, channel_id=channel_id, member_id=member_id
