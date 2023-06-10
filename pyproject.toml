@@ -29,7 +29,7 @@ version = "0.0.1"
 include = ["fuo*"]
 
 [tool.setuptools.package-data]
-fuo = ["*.ini"]
+"fuo.migrations" = ["*.ini"]
 
 [tool.setuptools.exclude-package-data]
 fuo = [".gitignore"]
