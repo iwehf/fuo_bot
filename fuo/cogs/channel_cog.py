@@ -1,21 +1,27 @@
 import logging
+from typing import Any, Optional
 
 import discord
 import sqlalchemy as sa
 from discord.ext import commands
 from typing_extensions import Annotated
 
-from fuo import db, models, utils, config
+from fuo import config, db, models, utils
 
 _logger = logging.getLogger(__name__)
 
 
 class ChannelTypeNotFound(commands.CommandError):
-    pass
+    def __init__(self, channel_name: str):
+        self.channel_name = channel_name
+        super().__init__()
 
 
 class ChannelTypeExists(commands.CommandError):
-    pass
+    def __init__(self, channel_name: str, channel_type: models.ChannelType):
+        self.channel_name = channel_name
+        self.channel_type = channel_type
+        super().__init__()
 
 
 class ChannelCog(commands.Cog, name="channel"):
@@ -55,7 +61,9 @@ class ChannelCog(commands.Cog, name="channel"):
             )
             channel_conf = (await sess.execute(q)).scalar_one_or_none()
             if channel_conf is not None:
-                raise ChannelTypeExists
+                raise ChannelTypeExists(
+                    channel_name=channel.name, channel_type=channel_type
+                )
 
             if self._is_unique_channel(channel_type):
                 # for unique channel type, change the old channel type record
@@ -113,6 +121,8 @@ class ChannelCog(commands.Cog, name="channel"):
                 await sess.delete(channel_conf)
                 await sess.commit()
                 _logger.info(f"remove channel {channel.name} type {channel_type.name}")
+            else:
+                raise ChannelTypeNotFound(channel_name=channel.name)
 
     @commands.command(name="get-channel-type", help="Get type of the specifie channel.")
     @commands.has_role(config.discord_role)
@@ -129,11 +139,13 @@ class ChannelCog(commands.Cog, name="channel"):
                 .where(models.ChannelConfig.guild_id == guild_id)
                 .where(models.ChannelConfig.channel_id == channel_id)
             )
-            channel_confs = (await sess.execute(q)).scalars().all()
-            if len(channel_confs) > 0:
-                channel_types = [conf.channel_type.name for conf in channel_confs]
-                channel_type_str = ", ".join(channel_types)
-                await ctx.send(f"channel {channel.name} types: {channel_type_str}")
+            channel_conf = (await sess.execute(q)).scalar_one_or_none()
+            if channel_conf is not None:
+                await ctx.send(
+                    f"channel {channel.name} type: {channel_conf.channel_type.name}"
+                )
+            else:
+                raise ChannelTypeNotFound(channel_name=channel.name)
 
     async def check_channel_type(
         self, guild_id: int, channel_id: int, channel_type: models.ChannelType
@@ -150,4 +162,11 @@ class ChannelCog(commands.Cog, name="channel"):
             return count > 0
 
     async def cog_command_error(self, ctx: commands.Context, error: Exception):
-        _logger.error(error)
+        if isinstance(error, ChannelTypeNotFound):
+            await ctx.send(f"Channel {error.channel_name} has no type now.")
+        elif isinstance(error, ChannelTypeExists):
+            await ctx.send(
+                f"Channel {error.channel_name} has already have type {error.channel_type.name} now."
+            )
+        else:
+            _logger.error(error)
