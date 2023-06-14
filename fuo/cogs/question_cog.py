@@ -217,12 +217,13 @@ class QuestionCog(commands.Cog, name="question"):
 
             score_cog = self._get_score_cog()
             await score_cog.question_score(
-                guild_id=guild_id, member_id=question.member_id, sess=sess
+                guild_id=guild_id, channel_id=channel_id, member_id=question.member_id, sess=sess
             )
             futs = []
             for answer in question.answers:
                 fut = score_cog.answer_score(
                     guild_id=guild_id,
+                    channel_id=channel_id,
                     member_id=answer.member_id,
                     like=answer.like,
                     dislike=answer.dislike,

@@ -17,3 +17,11 @@ def to_channel_type(s: str) -> models.ChannelType:
     except KeyError:
         raise BadArgument(f"{s} is not a valid channel type.")
     return res
+
+
+def to_score_source(s: str) -> models.ScoreSource:
+    try:
+        res = models.ScoreSource[s.upper()]
+    except KeyError:
+        raise BadArgument(f"{s} is not a valid score source.")
+    return res

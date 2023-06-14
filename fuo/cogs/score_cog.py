@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from typing import DefaultDict, Optional, Tuple
+from typing_extensions import Annotated
 
 import discord
 import sqlalchemy as sa
@@ -23,10 +24,10 @@ class ScoreCog(commands.Cog, name="score"):
             models.ScoreSource, DefaultDict[int | Tuple[int, int], float]
         ] = defaultdict(lambda: defaultdict(lambda: 1.0))
 
-    async def _get_bonus(
+    async def _get_action_score(
         self,
-        guild_id: int,
         score_src: models.ScoreSource,
+        guild_id: int,
         channel_id: Optional[int] = None,
         *,
         sess: AsyncSession | None = None,
@@ -39,23 +40,39 @@ class ScoreCog(commands.Cog, name="score"):
         else:
             score_key = (guild_id, channel_id)
 
+        # first find config for the specific score source and channel,
+        # then find config for the specific score source only,
         if score_key in score_config:
-            return score_config[score_key]
+            score = score_config[score_key]
+        elif guild_id in score_config:
+            score = score_config[guild_id]
         else:
-            q = (
-                sa.select(models.ScoreConfig)
-                .where(models.ScoreConfig.guild_id == guild_id)
-                .where(models.ScoreConfig.score_src == score_src)
-            )
+            conf = None
             if channel_id is not None:
-                q = q.where(models.ScoreConfig.channel_id == channel_id)
-            conf = (await sess.execute(q)).scalar_one_or_none()
+                q = (
+                    sa.select(models.ScoreConfig)
+                    .where(models.ScoreConfig.guild_id == guild_id)
+                    .where(models.ScoreConfig.score_src == score_src)
+                    .where(models.ScoreConfig.channel_id == channel_id)
+                )
+                conf = (await sess.execute(q)).scalar_one_or_none()
             if conf is not None:
                 score = conf.score
+                score_config[score_key] = score
             else:
-                score: float = score_config[guild_id]
-            score_config[score_key] = score
-            return score
+                q = (
+                    sa.select(models.ScoreConfig)
+                    .where(models.ScoreConfig.guild_id == guild_id)
+                    .where(models.ScoreConfig.score_src == score_src)
+                )
+                conf = (await sess.execute(q)).scalar_one_or_none()
+                if conf is not None:
+                    score = conf.score
+                    score_config[guild_id] = score
+                else:
+                    score = score_config[score_key]
+
+        return score
 
     @db.use_session
     async def _add_member_score(
@@ -89,12 +106,20 @@ class ScoreCog(commands.Cog, name="score"):
 
     @db.use_session
     async def post_score(
-        self, guild_id: int, member_id: int, *, sess: AsyncSession | None = None
+        self,
+        guild_id: int,
+        channel_id: int,
+        member_id: int,
+        *,
+        sess: AsyncSession | None = None,
     ):
         assert sess is not None
 
-        score = await self._get_bonus(
-            guild_id=guild_id, score_src=models.ScoreSource.POST, sess=sess
+        score = await self._get_action_score(
+            guild_id=guild_id,
+            channel_id=channel_id,
+            score_src=models.ScoreSource.POST,
+            sess=sess,
         )
         await self._add_member_score(
             guild_id=guild_id,
@@ -107,12 +132,20 @@ class ScoreCog(commands.Cog, name="score"):
 
     @db.use_session
     async def post_reaction_score(
-        self, guild_id: int, member_id: int, *, sess: AsyncSession | None = None
+        self,
+        guild_id: int,
+        channel_id: int,
+        member_id: int,
+        *,
+        sess: AsyncSession | None = None,
     ):
         assert sess is not None
 
-        score = await self._get_bonus(
-            guild_id=guild_id, score_src=models.ScoreSource.POST_REACTION, sess=sess
+        score = await self._get_action_score(
+            guild_id=guild_id,
+            channel_id=channel_id,
+            score_src=models.ScoreSource.POST_REACTION,
+            sess=sess,
         )
         await self._add_member_score(
             guild_id=guild_id,
@@ -134,10 +167,10 @@ class ScoreCog(commands.Cog, name="score"):
     ):
         assert sess is not None
 
-        score = await self._get_bonus(
+        score = await self._get_action_score(
             guild_id=guild_id,
-            score_src=models.ScoreSource.CHAT,
             channel_id=channel_id,
+            score_src=models.ScoreSource.CHAT,
             sess=sess,
         )
         await self._add_member_score(
@@ -160,10 +193,10 @@ class ScoreCog(commands.Cog, name="score"):
     ):
         assert sess is not None
 
-        score = await self._get_bonus(
+        score = await self._get_action_score(
             guild_id=guild_id,
-            score_src=models.ScoreSource.CHAT_REACTION,
             channel_id=channel_id,
+            score_src=models.ScoreSource.CHAT_REACTION,
             sess=sess,
         )
         await self._add_member_score(
@@ -179,14 +212,18 @@ class ScoreCog(commands.Cog, name="score"):
     async def question_score(
         self,
         guild_id: int,
+        channel_id: int,
         member_id: int,
         *,
         sess: AsyncSession | None = None,
     ):
         assert sess is not None
 
-        score = await self._get_bonus(
-            guild_id=guild_id, score_src=models.ScoreSource.QUESTION, sess=sess
+        score = await self._get_action_score(
+            guild_id=guild_id,
+            channel_id=channel_id,
+            score_src=models.ScoreSource.QUESTION,
+            sess=sess,
         )
         await self._add_member_score(
             guild_id=guild_id,
@@ -201,6 +238,7 @@ class ScoreCog(commands.Cog, name="score"):
     async def answer_score(
         self,
         guild_id: int,
+        channel_id: int,
         member_id: int,
         like: int,
         dislike: int,
@@ -209,11 +247,17 @@ class ScoreCog(commands.Cog, name="score"):
     ):
         assert sess is not None
 
-        answer_score = await self._get_bonus(
-            guild_id=guild_id, score_src=models.ScoreSource.ANSWER, sess=sess
+        answer_score = await self._get_action_score(
+            guild_id=guild_id,
+            channel_id=channel_id,
+            score_src=models.ScoreSource.ANSWER,
+            sess=sess,
         )
-        answer_reation_score_base = await self._get_bonus(
-            guild_id=guild_id, score_src=models.ScoreSource.ANSWER_REACTION, sess=sess
+        answer_reation_score_base = await self._get_action_score(
+            guild_id=guild_id,
+            channel_id=channel_id,
+            score_src=models.ScoreSource.ANSWER_REACTION,
+            sess=sess,
         )
         answer_reaction_score = answer_reation_score_base * (like - dislike)
 
@@ -277,3 +321,83 @@ class ScoreCog(commands.Cog, name="score"):
 
     async def cog_command_error(self, ctx: commands.Context, error: Exception):
         _logger.error(error)
+
+    @commands.command(
+        name="set-action-score",
+        help="Set reward score of the specific action. "
+        "Action type can be POST, POST_REACTION, QUESTION, ANSWER, "
+        "ANSWER_REACTION, CHAT, CHAT_REACTION",
+    )
+    @commands.has_role(config.discord_role)
+    async def set_action_score(
+        self,
+        ctx: commands.Context,
+        score_src: Annotated[models.ScoreSource, utils.to_score_source],
+        channel: Optional[discord.TextChannel] = None,
+        *,
+        score: float,
+    ):
+        assert ctx.guild is not None
+        guild_id = ctx.guild.id
+
+        async with db.session_scope() as sess:
+            q = (
+                sa.select(models.ScoreConfig)
+                .where(models.ScoreConfig.guild_id == guild_id)
+                .where(models.ScoreConfig.score_src == score_src)
+            )
+            if channel is not None:
+                q = q.where(models.ScoreConfig.channel_id == channel.id)
+            conf = (await sess.execute(q)).scalar_one_or_none()
+            if conf is not None:
+                conf.score = score
+            else:
+                conf = models.ScoreConfig(
+                    guild_id=guild_id,
+                    score_src=score_src,
+                    score=score,
+                )
+                if channel is not None:
+                    conf.channel_id = channel.id
+                sess.add(conf)
+            await sess.commit()
+
+        # update local score config
+        if channel is not None:
+            score_key = (guild_id, channel.id)
+        else:
+            score_key = guild_id
+
+        self.score_configs[score_src][score_key] = score
+
+        channel_name = channel.name if channel is not None else "all"
+        _logger.info(
+            f"guild {ctx.guild.name} set action {score_src.name} of {channel_name} channel {score} scores"
+        )
+
+    @commands.command(
+        name="get-action-score",
+        help="Get reward score of the specific action. "
+        "Action type can be POST, POST_REACTION, QUESTION, ANSWER, "
+        "ANSWER_REACTION, CHAT, CHAT_REACTION",
+    )
+    @commands.has_role(config.discord_role)
+    async def get_action_score(
+        self,
+        ctx: commands.Context,
+        score_src: Annotated[models.ScoreSource, utils.to_score_source],
+        channel: Optional[discord.TextChannel] = None,
+    ):
+        assert ctx.guild is not None
+        guild_id = ctx.guild.id
+
+        async with db.session_scope() as sess:
+            channel_id = channel.id if channel is not None else None
+            score = await self._get_action_score(
+                score_src=score_src, guild_id=guild_id, channel_id=channel_id, sess=sess
+            )
+
+        channel_name = channel.name if channel is not None else "all"
+        await ctx.send(
+            f"action {score_src.name} score of {channel_name} channel: {score}"
+        )

@@ -56,7 +56,7 @@ class PostCog(commands.Cog, name="post"):
                 )
             ):
                 score_cog = self._get_score_cog()
-                await score_cog.post_score(guild_id=guild_id, member_id=member_id)
+                await score_cog.post_score(guild_id=guild_id, channel_id=channel_id, member_id=member_id)
 
                 _logger.info(
                     f"author {message.author.name}, post in message {message.id}"
@@ -87,6 +87,7 @@ class PostCog(commands.Cog, name="post"):
                     score_cog = self._get_score_cog()
                     await score_cog.post_reaction_score(
                         guild_id=payload.guild_id,
+                        channel_id=payload.channel_id,
                         member_id=payload.member.id,
                     )
         except Exception as e:
