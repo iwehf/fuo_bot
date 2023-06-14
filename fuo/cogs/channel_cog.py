@@ -10,9 +10,21 @@ from fuo import db, models, utils, config
 _logger = logging.getLogger(__name__)
 
 
+class ChannelTypeNotFound(commands.CommandError):
+    pass
+
+
+class ChannelTypeExists(commands.CommandError):
+    pass
+
+
 class ChannelCog(commands.Cog, name="channel"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self._unique_channel_types = [models.ChannelType.QUESTION]
+
+    def _is_unique_channel(self, channel_type: models.ChannelType) -> bool:
+        return channel_type in self._unique_channel_types
 
     @commands.command(
         name="set-channel-type",
@@ -21,7 +33,7 @@ class ChannelCog(commands.Cog, name="channel"):
         "In the POST channel, sending messages and making reactions can earn POST scores. "
         "In the QUESTION channel, answering questions and making reactions can earn QUESTION scores. "
         "In CHAT channels, sending messages and making reactions can earn CHAT scores. "
-        "In one guild, the POST channel and the QUESTION channel are unique, and there can be several CHAT channels.",
+        "In one guild, the QUESTION channel is unique, and there can be several POST or CHAT channels.",
     )
     @commands.has_role(config.discord_role)
     async def set_channel(
@@ -35,26 +47,42 @@ class ChannelCog(commands.Cog, name="channel"):
         channel_id = channel.id
 
         async with db.session_scope() as sess:
+            # one channel can only have one type
             q = (
                 sa.select(models.ChannelConfig)
                 .where(models.ChannelConfig.guild_id == guild_id)
                 .where(models.ChannelConfig.channel_id == channel_id)
-                .where(models.ChannelConfig.channel_type == channel_type)
             )
             channel_conf = (await sess.execute(q)).scalar_one_or_none()
-            if (
-                channel_conf is not None
-                and channel_conf.channel_id != channel_id
-                and channel_type in [models.ChannelType.POST, models.ChannelType.QUESTION]
-            ):
-                channel_conf.channel_id = channel_id
+            if channel_conf is not None:
+                raise ChannelTypeExists
+
+            if self._is_unique_channel(channel_type):
+                # for unique channel type, change the old channel type record
+                q = (
+                    sa.select(models.ChannelConfig)
+                    .where(models.ChannelConfig.guild_id == guild_id)
+                    .where(models.ChannelConfig.channel_type == channel_type)
+                )
+                old_channel_conf = (await sess.execute(q)).scalar_one_or_none()
+                if old_channel_conf is not None:
+                    old_channel_conf.channel_id = channel_id
+                else:
+                    channel_conf = models.ChannelConfig(
+                        guild_id=guild_id,
+                        channel_id=channel_id,
+                        channel_type=channel_type,
+                    )
+                    sess.add(channel_conf)
             else:
+                # for non unique channel type, add new channel type record
                 channel_conf = models.ChannelConfig(
                     guild_id=guild_id,
                     channel_id=channel_id,
                     channel_type=channel_type,
                 )
                 sess.add(channel_conf)
+
             await sess.commit()
 
         _logger.info(f"set channel {channel.name} type {channel_type.name}")
