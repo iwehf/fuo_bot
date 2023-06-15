@@ -1,12 +1,13 @@
 from .channel import ChannelConfig, ChannelType
-from .score import ScoreConfig, ScoreSource, ScoreType, UserScore
-from .question import Question, Answer
+from .question import Answer, Question
+from .score import ScoreConfig, ScoreLog, ScoreSource, ScoreType, UserScore
 
 __all__ = [
     "UserScore",
     "ScoreType",
     "ScoreConfig",
     "ScoreSource",
+    "ScoreLog",
     "ChannelType",
     "ChannelConfig",
     "Question",

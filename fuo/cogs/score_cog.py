@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections import defaultdict
 from typing import DefaultDict, Optional, Tuple
-from typing_extensions import Annotated
 
 import discord
 import sqlalchemy as sa
@@ -20,9 +20,12 @@ class ScoreCog(commands.Cog, name="score"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        self.score_configs: DefaultDict[
+        self.action_scores: DefaultDict[
             models.ScoreSource, DefaultDict[int | Tuple[int, int], float]
         ] = defaultdict(lambda: defaultdict(lambda: 1.0))
+        self.action_cooldowns: DefaultDict[
+            models.ScoreSource, DefaultDict[int | Tuple[int, int], int]
+        ] = defaultdict(lambda: defaultdict(lambda: 0))
 
     async def _get_action_score(
         self,
@@ -34,7 +37,7 @@ class ScoreCog(commands.Cog, name="score"):
     ) -> float:
         assert sess is not None
 
-        score_config = self.score_configs[score_src]
+        score_config = self.action_scores[score_src]
         if channel_id is None:
             score_key = guild_id
         else:
@@ -73,6 +76,94 @@ class ScoreCog(commands.Cog, name="score"):
                     score = score_config[score_key]
 
         return score
+
+    async def _get_action_cooldown(
+        self,
+        score_src: models.ScoreSource,
+        guild_id: int,
+        channel_id: Optional[int] = None,
+        *,
+        sess: AsyncSession | None = None,
+    ):
+        assert sess is not None
+
+        cooldown_config = self.action_cooldowns[score_src]
+        if channel_id is not None:
+            key = (guild_id, channel_id)
+        else:
+            key = guild_id
+
+        if key in cooldown_config:
+            cooldown = cooldown_config[key]
+        elif guild_id in cooldown_config:
+            cooldown = cooldown_config[guild_id]
+        else:
+            conf = None
+            if channel_id is not None:
+                q = (
+                    sa.select(models.ScoreConfig)
+                    .where(models.ScoreConfig.guild_id == guild_id)
+                    .where(models.ScoreConfig.score_src == score_src)
+                    .where(models.ScoreConfig.channel_id == channel_id)
+                )
+                conf = (await sess.execute(q)).scalar_one_or_none()
+            if conf is not None:
+                cooldown = conf.cooldown or 0
+                cooldown_config[key] = cooldown
+            else:
+                q = (
+                    sa.select(models.ScoreConfig)
+                    .where(models.ScoreConfig.guild_id == guild_id)
+                    .where(models.ScoreConfig.score_src == score_src)
+                )
+                conf = (await sess.execute(q)).scalar_one_or_none()
+                if conf is not None:
+                    cooldown = conf.cooldown or 0
+                    cooldown_config[guild_id] = cooldown
+                else:
+                    cooldown = 0
+
+        return cooldown
+
+    @db.use_session
+    async def _check_score_cooldown(
+        self,
+        guild_id: int,
+        channel_id: int,
+        member_id: int,
+        score_src: models.ScoreSource,
+        score: float,
+        *,
+        sess: AsyncSession | None = None,
+    ) -> bool:
+        assert sess is not None
+        q = (
+            sa.select(models.ScoreLog)
+            .where(models.ScoreLog.guild_id == guild_id)
+            .where(models.ScoreLog.channel_id == channel_id)
+            .where(models.ScoreLog.member_id == member_id)
+            .where(models.ScoreLog.score_src == score_src)
+            .order_by(sa.desc(models.ScoreLog.id))
+            .limit(1)
+        )
+        log = (await sess.execute(q)).scalars().first()
+        if log is not None:
+            cooldown = await self._get_action_cooldown(
+                score_src=score_src, guild_id=guild_id, channel_id=channel_id, sess=sess
+            )
+            if time.time() < log.created_at.timestamp() + cooldown:
+                return False
+
+        newLog = models.ScoreLog(
+            guild_id=guild_id,
+            channel_id=channel_id,
+            member_id=member_id,
+            score_src=score_src,
+            score=score,
+        )
+        sess.add(newLog)
+        await sess.commit()
+        return True
 
     @db.use_session
     async def _add_member_score(
@@ -121,14 +212,24 @@ class ScoreCog(commands.Cog, name="score"):
             score_src=models.ScoreSource.POST,
             sess=sess,
         )
-        await self._add_member_score(
+        if await self._check_score_cooldown(
             guild_id=guild_id,
+            channel_id=channel_id,
             member_id=member_id,
+            score_src=models.ScoreSource.POST,
             score=score,
-            score_type=models.ScoreType.POST,
             sess=sess,
-        )
-        _logger.info(f"add {score} post score to member {member_id}")
+        ):
+            await self._add_member_score(
+                guild_id=guild_id,
+                member_id=member_id,
+                score=score,
+                score_type=models.ScoreType.POST,
+                sess=sess,
+            )
+            _logger.info(f"add {score} post score to member {member_id}")
+        else:
+            _logger.info(f"member {member_id} post score is in cooldown")
 
     @db.use_session
     async def post_reaction_score(
@@ -147,14 +248,24 @@ class ScoreCog(commands.Cog, name="score"):
             score_src=models.ScoreSource.POST_REACTION,
             sess=sess,
         )
-        await self._add_member_score(
+        if await self._check_score_cooldown(
             guild_id=guild_id,
+            channel_id=channel_id,
             member_id=member_id,
+            score_src=models.ScoreSource.POST_REACTION,
             score=score,
-            score_type=models.ScoreType.POST,
             sess=sess,
-        )
-        _logger.info(f"add {score} post reaction score to member {member_id}")
+        ):
+            await self._add_member_score(
+                guild_id=guild_id,
+                member_id=member_id,
+                score=score,
+                score_type=models.ScoreType.POST,
+                sess=sess,
+            )
+            _logger.info(f"add {score} post reaction score to member {member_id}")
+        else:
+            _logger.info(f"member {member_id} post reaction score is in cooldown")
 
     @db.use_session
     async def chat_score(
@@ -173,14 +284,24 @@ class ScoreCog(commands.Cog, name="score"):
             score_src=models.ScoreSource.CHAT,
             sess=sess,
         )
-        await self._add_member_score(
+        if await self._check_score_cooldown(
             guild_id=guild_id,
+            channel_id=channel_id,
             member_id=member_id,
+            score_src=models.ScoreSource.CHAT,
             score=score,
-            score_type=models.ScoreType.CHAT,
             sess=sess,
-        )
-        _logger.info(f"add {score} chat score to member {member_id}")
+        ):
+            await self._add_member_score(
+                guild_id=guild_id,
+                member_id=member_id,
+                score=score,
+                score_type=models.ScoreType.CHAT,
+                sess=sess,
+            )
+            _logger.info(f"add {score} chat score to member {member_id}")
+        else:
+            _logger.info(f"member {member_id} chat score is in cooldown")
 
     @db.use_session
     async def chat_reaction_score(
@@ -199,14 +320,24 @@ class ScoreCog(commands.Cog, name="score"):
             score_src=models.ScoreSource.CHAT_REACTION,
             sess=sess,
         )
-        await self._add_member_score(
+        if await self._check_score_cooldown(
             guild_id=guild_id,
+            channel_id=channel_id,
             member_id=member_id,
+            score_src=models.ScoreSource.CHAT_REACTION,
             score=score,
-            score_type=models.ScoreType.CHAT,
             sess=sess,
-        )
-        _logger.info(f"add {score} chat reaction score to member {member_id}")
+        ):
+            await self._add_member_score(
+                guild_id=guild_id,
+                member_id=member_id,
+                score=score,
+                score_type=models.ScoreType.CHAT,
+                sess=sess,
+            )
+            _logger.info(f"add {score} chat reaction score to member {member_id}")
+        else:
+            _logger.info(f"member {member_id} chat reaction score is in cooldown")
 
     @db.use_session
     async def question_score(
@@ -225,14 +356,24 @@ class ScoreCog(commands.Cog, name="score"):
             score_src=models.ScoreSource.QUESTION,
             sess=sess,
         )
-        await self._add_member_score(
+        if await self._check_score_cooldown(
             guild_id=guild_id,
+            channel_id=channel_id,
             member_id=member_id,
+            score_src=models.ScoreSource.QUESTION,
             score=score,
-            score_type=models.ScoreType.QUESTION,
             sess=sess,
-        )
-        _logger.info(f"add {score} question score to member {member_id}")
+        ):
+            await self._add_member_score(
+                guild_id=guild_id,
+                member_id=member_id,
+                score=score,
+                score_type=models.ScoreType.QUESTION,
+                sess=sess,
+            )
+            _logger.info(f"add {score} question score to member {member_id}")
+        else:
+            _logger.info(f"member {member_id} question score is in cooldown")
 
     @db.use_session
     async def answer_score(
@@ -253,6 +394,25 @@ class ScoreCog(commands.Cog, name="score"):
             score_src=models.ScoreSource.ANSWER,
             sess=sess,
         )
+        if await self._check_score_cooldown(
+            guild_id=guild_id,
+            channel_id=channel_id,
+            member_id=member_id,
+            score_src=models.ScoreSource.ANSWER,
+            score=answer_score,
+            sess=sess,
+        ):
+            await self._add_member_score(
+                guild_id=guild_id,
+                member_id=member_id,
+                score=answer_score,
+                score_type=models.ScoreType.QUESTION,
+                sess=sess,
+            )
+            _logger.info(f"add {answer_score} answer score to member {member_id}")
+        else:
+            _logger.info(f"member {member_id} answer score is in cooldown")
+
         answer_reation_score_base = await self._get_action_score(
             guild_id=guild_id,
             channel_id=channel_id,
@@ -260,16 +420,26 @@ class ScoreCog(commands.Cog, name="score"):
             sess=sess,
         )
         answer_reaction_score = answer_reation_score_base * (like - dislike)
-
-        score = answer_score + answer_reaction_score
-        await self._add_member_score(
+        if await self._check_score_cooldown(
             guild_id=guild_id,
+            channel_id=channel_id,
             member_id=member_id,
-            score=score,
-            score_type=models.ScoreType.QUESTION,
+            score_src=models.ScoreSource.ANSWER_REACTION,
+            score=answer_reaction_score,
             sess=sess,
-        )
-        _logger.info(f"add {score} answer score to member {member_id}")
+        ):
+            await self._add_member_score(
+                guild_id=guild_id,
+                member_id=member_id,
+                score=answer_reaction_score,
+                score_type=models.ScoreType.QUESTION,
+                sess=sess,
+            )
+            _logger.info(
+                f"add {answer_score} answer reaction score to member {member_id}"
+            )
+        else:
+            _logger.info(f"member {member_id} answer reaction score is in cooldown")
 
     @commands.command(
         name="get-score",
@@ -368,7 +538,7 @@ class ScoreCog(commands.Cog, name="score"):
         else:
             score_key = guild_id
 
-        self.score_configs[score_src][score_key] = score
+        self.action_scores[score_src][score_key] = score
 
         channel_name = channel.name if channel is not None else "all"
         _logger.info(
@@ -400,4 +570,71 @@ class ScoreCog(commands.Cog, name="score"):
         channel_name = channel.name if channel is not None else "all"
         await ctx.send(
             f"action {score_src.name} score of {channel_name} channel: {score}"
+        )
+
+    @commands.command(
+        name="set-action-cooldown",
+        help="Set cooldown of the specific action. "
+        "Action type can be POST, POST_REACTION, QUESTION, ANSWER, "
+        "ANSWER_REACTION, CHAT, CHAT_REACTION",
+    )
+    @commands.has_role(config.discord_role)
+    async def set_action_cooldown(
+        self,
+        ctx: commands.Context,
+        score_src: Annotated[models.ScoreSource, utils.to_score_source],
+        channel: Optional[discord.TextChannel] = None,
+        *,
+        cooldown: Annotated[int, utils.timestr_to_seconds],
+    ):
+        assert ctx.guild is not None
+        guild_id = ctx.guild.id
+
+        async with db.session_scope() as sess:
+            q = (
+                sa.select(models.ScoreConfig)
+                .where(models.ScoreConfig.guild_id == guild_id)
+                .where(models.ScoreConfig.score_src == score_src)
+            )
+            if channel is not None:
+                q = q.where(models.ScoreConfig.channel_id == channel.id)
+            conf = (await sess.execute(q)).scalar_one_or_none()
+            if conf is not None:
+                conf.cooldown = cooldown
+            else:
+                conf = models.ScoreConfig(
+                    guild_id=guild_id,
+                    score_src=score_src,
+                    cooldown=cooldown,
+                )
+                if channel is not None:
+                    conf.channel_id = channel.id
+                sess.add(conf)
+            await sess.commit()
+
+    @commands.command(
+        name="get-action-cooldown",
+        help="Get cooldown of the specific action. "
+        "Action type can be POST, POST_REACTION, QUESTION, ANSWER, "
+        "ANSWER_REACTION, CHAT, CHAT_REACTION",
+    )
+    @commands.has_role(config.discord_role)
+    async def get_action_cooldown(
+        self,
+        ctx: commands.Context,
+        score_src: Annotated[models.ScoreSource, utils.to_score_source],
+        channel: Optional[discord.TextChannel] = None,
+    ):
+        assert ctx.guild is not None
+        guild_id = ctx.guild.id
+
+        async with db.session_scope() as sess:
+            channel_id = channel.id if channel is not None else None
+            cooldown = await self._get_action_cooldown(
+                score_src=score_src, guild_id=guild_id, channel_id=channel_id, sess=sess
+            )
+
+        channel_name = channel.name if channel is not None else "all"
+        await ctx.send(
+            f"action {score_src.name} cooldown of {channel_name} channel: {cooldown}"
         )

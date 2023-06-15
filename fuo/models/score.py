@@ -43,8 +43,24 @@ class ScoreConfig(Base, BaseMixin):
     score_src: Mapped[ScoreSource] = mapped_column(
         sa.Enum(ScoreSource), nullable=False, index=True
     )
-    score: Mapped[float] = mapped_column(nullable=False, index=True)
+    score: Mapped[float] = mapped_column(nullable=False, index=True, default=0)
 
     channel_id: Mapped[Optional[int]] = mapped_column(
         sa.BigInteger, nullable=True, index=True, default=None
     )
+    cooldown: Mapped[Optional[int]] = mapped_column(
+        sa.Integer, nullable=True, index=False, default=None
+    )
+
+
+class ScoreLog(Base, BaseMixin):
+    __tablename__ = "score_logs"
+
+    guild_id: Mapped[int] = mapped_column(sa.BigInteger, nullable=False, index=True)
+    channel_id: Mapped[int] = mapped_column(sa.BigInteger, nullable=False, index=True)
+    member_id: Mapped[int] = mapped_column(sa.BigInteger, nullable=False, index=True)
+    
+    score_src: Mapped[ScoreSource] = mapped_column(
+        sa.Enum(ScoreSource), nullable=False, index=True
+    )
+    score: Mapped[float] = mapped_column(nullable=False, index=False)
