@@ -18,3 +18,7 @@ _discord: Dict[str, Any] = _c.get("discord")
 
 discord_token: str = _discord.get("token", "")
 discord_role: str = _discord.get("role", "")
+
+info_color = "#03a8f4"
+success_color = "#66bb6a"
+error_color = "#e50113"

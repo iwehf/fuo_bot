@@ -93,7 +93,13 @@ class ChannelCog(commands.Cog, name="channel"):
 
             await sess.commit()
 
-        _logger.info(f"set channel {channel.name} type {channel_type.name}")
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.success_color),
+            title="Set channel type successfully",
+        )
+        embed.add_field(name="Channel", value=channel.mention, inline=True)
+        embed.add_field(name="Type", value=channel_type.name, inline=True)
+        await ctx.send(embed=embed)
 
     @commands.command(
         name="remove-channel-type", help="Remove the specified type of the channel."
@@ -120,9 +126,16 @@ class ChannelCog(commands.Cog, name="channel"):
             if channel_conf is not None:
                 await sess.delete(channel_conf)
                 await sess.commit()
-                _logger.info(f"remove channel {channel.name} type {channel_type.name}")
             else:
                 raise ChannelTypeNotFound(channel_name=channel.name)
+
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.success_color),
+            title="Remove channel type successfully",
+        )
+        embed.add_field(name="Channel", value=channel.mention, inline=True)
+        embed.add_field(name="Type", value=channel_type.name, inline=True)
+        await ctx.send(embed=embed)
 
     @commands.command(name="get-channel-type", help="Get type of the specifie channel.")
     @commands.has_role(config.discord_role)
@@ -141,9 +154,15 @@ class ChannelCog(commands.Cog, name="channel"):
             )
             channel_conf = (await sess.execute(q)).scalar_one_or_none()
             if channel_conf is not None:
-                await ctx.send(
-                    f"channel {channel.name} type: {channel_conf.channel_type.name}"
+                embed = discord.Embed(
+                    color=discord.Color.from_str(config.info_color),
+                    title="Get channel type result",
                 )
+                embed.add_field(name="Channel", value=channel.mention, inline=True)
+                embed.add_field(
+                    name="Type", value=channel_conf.channel_type.name, inline=True
+                )
+                await ctx.send(embed=embed)
             else:
                 raise ChannelTypeNotFound(channel_name=channel.name)
 
@@ -162,11 +181,18 @@ class ChannelCog(commands.Cog, name="channel"):
             return count > 0
 
     async def cog_command_error(self, ctx: commands.Context, error: Exception):
-        if isinstance(error, ChannelTypeNotFound):
-            await ctx.send(f"Channel {error.channel_name} has no type now.")
+        _logger.error(error)
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.error_color), title="Error!"
+        )
+        if isinstance(error, commands.MissingRole):
+            embed.description = "Sorry, you are not permitted to execute this command."
+        elif isinstance(error, commands.BadArgument):
+            embed.description = f"Sorry, {str(error)}"
+        elif isinstance(error, ChannelTypeNotFound):
+            embed.description = f"Channel {error.channel_name} has no type now."
         elif isinstance(error, ChannelTypeExists):
-            await ctx.send(
-                f"Channel {error.channel_name} has already have type {error.channel_type.name} now."
-            )
+            embed.description = f"Channel {error.channel_name} has already have type {error.channel_type.name} now."
         else:
-            _logger.error(error)
+            embed.description = "Sorry, there's sth wrong with FUO bot."
+        await ctx.send(embed=embed)

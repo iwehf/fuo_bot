@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from discord.ext import commands
 from tabulate import tabulate
 
-from fuo import db, models, utils, config
+from fuo import config, db, models, utils
 
 from .channel_cog import ChannelCog
 from .score_cog import ScoreCog
@@ -28,7 +28,7 @@ class QuestionMissing(commands.CommandError):
     pass
 
 
-def question_summary(guild: discord.Guild, question: models.Question) -> str:
+def question_summary(guild: discord.Guild, question: models.Question) -> discord.Embed:
     rows = []
     for answer in question.answers:
         member = guild.get_member(answer.member_id)
@@ -43,15 +43,14 @@ def question_summary(guild: discord.Guild, question: models.Question) -> str:
 
     table = tabulate(rows, headers="keys", tablefmt="pretty")
 
-    res = (
-        f"The question is closed.\n"
-        f"There are {len(question.answers)} answers in total.\n"
-        "Here are the answers' details:\n"
+    embed = discord.Embed(
+        color=discord.Color.from_str(config.info_color),
+        title="Close the question successfully.",
     )
+    embed.add_field(name="Answers count", value=len(question.answers), inline=False)
+    embed.add_field(name="Answers detail", value=f"```{table}```", inline=False)
 
-    res += f"```\n{table}\n```"
-
-    return res
+    return embed
 
 
 class QuestionCog(commands.Cog, name="question"):
@@ -119,19 +118,31 @@ class QuestionCog(commands.Cog, name="question"):
             sess.add(question)
             await sess.commit()
 
-        _logger.info(
-            f"author {ctx.author.name}, ask a question in message {ctx.message.id}"
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.success_color),
+            title="Ask a question successfully",
+            description=f"{ctx.author.mention} ask a question.",
         )
+        await ctx.send(embed=embed)
 
     @ask_question.error
     async def ask_question_error(self, ctx: commands.Context, error: Exception):
-        if isinstance(error, QuestionNotFinished):
-            await ctx.send(
+        _logger.error(error)
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.error_color), title="Error!"
+        )
+        if isinstance(error, commands.MissingRole):
+            embed.description = "Sorry, you are not permitted to execute this command."
+        elif isinstance(error, commands.BadArgument):
+            embed.description = f"Sorry, {str(error)}"
+        elif isinstance(error, QuestionNotFinished):
+            embed.description = (
                 "Last question is not closed yet! "
                 "You should close the last question first and then ask a new question."
             )
         else:
-            _logger.error(error)
+            embed.description = "Sorry, there's sth wrong with FUO bot."
+        await ctx.send(embed=embed)
 
     @commands.command(name="answer", help="Answer the last question")
     async def answer_question(self, ctx: commands.Context):
@@ -156,6 +167,7 @@ class QuestionCog(commands.Cog, name="question"):
                 raise QuestionMissing
             if not question.opened:
                 raise QuestionFinished
+            question_author = self.bot.get_user(question.member_id)
 
             answer = models.Answer(
                 guild_id=guild_id,
@@ -166,20 +178,36 @@ class QuestionCog(commands.Cog, name="question"):
             )
             sess.add(answer)
             await sess.commit()
-        _logger.info(
-            f"author {ctx.author.name}, write an answer in message {ctx.message.id}"
+
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.success_color),
+            title="Answer the question successfully",
         )
+        if question_author is not None:
+            embed.description = f"{ctx.author.mention} answer the question asked by {question_author.mention}."
+        else:
+            embed.description = f"{ctx.author.mention} answer the question"
+        await ctx.send(embed=embed)
 
     @answer_question.error
     async def answer_question_error(self, ctx: commands.Context, error: Exception):
-        if isinstance(error, QuestionMissing):
-            await ctx.send("Question is not found! Cannot answer it.")
+        _logger.error(error)
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.error_color), title="Error!"
+        )
+        if isinstance(error, commands.MissingRole):
+            embed.description = "Sorry, you are not permitted to execute this command."
+        elif isinstance(error, commands.BadArgument):
+            embed.description = f"Sorry, {str(error)}"
+        elif isinstance(error, QuestionMissing):
+            embed.description = "Question is not found! Cannot answer it."
         elif isinstance(error, QuestionFinished):
-            await ctx.send(
+            embed.description = (
                 "The question has been already closed! Cannot answer it twice."
             )
         else:
-            _logger.error(error)
+            embed.description = "Sorry, there's sth wrong with FUO bot."
+        await ctx.send(embed=embed)
 
     @commands.command(
         name="close-question",
@@ -217,7 +245,10 @@ class QuestionCog(commands.Cog, name="question"):
 
             score_cog = self._get_score_cog()
             await score_cog.question_score(
-                guild_id=guild_id, channel_id=channel_id, member_id=question.member_id, sess=sess
+                guild_id=guild_id,
+                channel_id=channel_id,
+                member_id=question.member_id,
+                sess=sess,
             )
             futs = []
             for answer in question.answers:
@@ -234,21 +265,27 @@ class QuestionCog(commands.Cog, name="question"):
 
             await sess.commit()
 
-        await ctx.send(summary)
-        _logger.info(
-            f"author {ctx.author.name}, close the question in message {ctx.message.id}"
-        )
+        await ctx.send(embed=summary)
 
     @close_question.error
     async def close_question_error(self, ctx: commands.Context, error: Exception):
-        if isinstance(error, QuestionMissing):
-            await ctx.send("Question is not found! Cannot close it.")
+        _logger.error(error)
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.error_color), title="Error!"
+        )
+        if isinstance(error, commands.MissingRole):
+            embed.description = "Sorry, you are not permitted to execute this command."
+        elif isinstance(error, commands.BadArgument):
+            embed.description = f"Sorry, {str(error)}"
+        elif isinstance(error, QuestionMissing):
+            embed.description = "Question is not found! Cannot close it."
         elif isinstance(error, QuestionFinished):
-            await ctx.send(
+            embed.description = (
                 "The question has been already closed! Cannot close it twice."
             )
         else:
-            _logger.error(error)
+            embed.description = "Sorry, there's sth wrong with FUO bot."
+        await ctx.send(embed=embed)
 
     @commands.Cog.listener(name="on_raw_reaction_add")
     async def reaction_on_answer(self, payload: discord.RawReactionActionEvent):

@@ -466,7 +466,14 @@ class ScoreCog(commands.Cog, name="score"):
             else:
                 score = user_score.score
 
-        await ctx.send(f"member {member.name} current {score_type.name} score: {score}")
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.info_color),
+            title="Get score result",
+        )
+        embed.add_field(name="Member", value=member.mention, inline=True)
+        embed.add_field(name="Type", value=score_type.name, inline=True)
+        embed.add_field(name="Score", value=score, inline=True)
+        await ctx.send(embed=embed)
 
     @commands.command(
         name="add-score",
@@ -487,10 +494,28 @@ class ScoreCog(commands.Cog, name="score"):
             score=score,
             score_type=score_type,
         )
-        await ctx.send(f"add {score} score to member {member.name}")
+
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.success_color),
+            title="Add score successfully",
+        )
+        embed.add_field(name="Member", value=member.mention, inline=True)
+        embed.add_field(name="Type", value=score_type.name, inline=True)
+        embed.add_field(name="Score", value=score, inline=True)
+        await ctx.send(embed=embed)
 
     async def cog_command_error(self, ctx: commands.Context, error: Exception):
         _logger.error(error)
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.error_color), title="Error!"
+        )
+        if isinstance(error, commands.MissingRole):
+            embed.description = "Sorry, you are not permitted to execute this command."
+        elif isinstance(error, commands.BadArgument):
+            embed.description = f"Sorry, {str(error)}"
+        else:
+            embed.description = "Sorry, there's sth wrong with FUO bot."
+        await ctx.send(embed=embed)
 
     @commands.command(
         name="set-action-score",
@@ -540,10 +565,17 @@ class ScoreCog(commands.Cog, name="score"):
 
         self.action_scores[score_src][score_key] = score
 
-        channel_name = channel.name if channel is not None else "all"
-        _logger.info(
-            f"guild {ctx.guild.name} set action {score_src.name} of {channel_name} channel {score} scores"
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.success_color),
+            title="Set action score successfully",
         )
+        embed.add_field(name="Action", value=score_src.name, inline=True)
+        if channel is not None:
+            embed.add_field(name="Channel", value=channel.mention, inline=True)
+        else:
+            embed.add_field(name="Channel", value="All", inline=True)
+        embed.add_field(name="Score", value=score, inline=True)
+        await ctx.send(embed=embed)
 
     @commands.command(
         name="get-action-score",
@@ -567,10 +599,17 @@ class ScoreCog(commands.Cog, name="score"):
                 score_src=score_src, guild_id=guild_id, channel_id=channel_id, sess=sess
             )
 
-        channel_name = channel.name if channel is not None else "all"
-        await ctx.send(
-            f"action {score_src.name} score of {channel_name} channel: {score}"
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.info_color),
+            title="Get action score result",
         )
+        embed.add_field(name="Action", value=score_src.name, inline=True)
+        if channel is not None:
+            embed.add_field(name="Channel", value=channel.mention, inline=True)
+        else:
+            embed.add_field(name="Channel", value="All", inline=True)
+        embed.add_field(name="Score", value=score, inline=True)
+        await ctx.send(embed=embed)
 
     @commands.command(
         name="set-action-cooldown",
@@ -612,6 +651,25 @@ class ScoreCog(commands.Cog, name="score"):
                 sess.add(conf)
             await sess.commit()
 
+        # update local cooldown config
+        if channel is not None:
+            key = (guild_id, channel.id)
+        else:
+            key = guild_id
+        self.action_cooldowns[score_src][key] = cooldown
+
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.success_color),
+            title="Set action cooldown successfully",
+        )
+        embed.add_field(name="Action", value=score_src.name, inline=True)
+        if channel is not None:
+            embed.add_field(name="Channel", value=channel.mention, inline=True)
+        else:
+            embed.add_field(name="Channel", value="All", inline=True)
+        embed.add_field(name="Cooldown", value=cooldown, inline=True)
+        await ctx.send(embed=embed)
+
     @commands.command(
         name="get-action-cooldown",
         help="Get cooldown of the specific action. "
@@ -634,7 +692,14 @@ class ScoreCog(commands.Cog, name="score"):
                 score_src=score_src, guild_id=guild_id, channel_id=channel_id, sess=sess
             )
 
-        channel_name = channel.name if channel is not None else "all"
-        await ctx.send(
-            f"action {score_src.name} cooldown of {channel_name} channel: {cooldown}"
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.info_color),
+            title="Get action cooldown result",
         )
+        embed.add_field(name="Action", value=score_src.name, inline=True)
+        if channel is not None:
+            embed.add_field(name="Channel", value=channel.mention, inline=True)
+        else:
+            embed.add_field(name="Channel", value="All", inline=True)
+        embed.add_field(name="Cooldown", value=cooldown, inline=True)
+        await ctx.send(embed=embed)
