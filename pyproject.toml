@@ -23,7 +23,7 @@ dependencies = [
     "aiomysql~=0.1.1",
     "alembic~=1.11.1"
 ]
-version = "0.0.4"
+version = "0.1.0"
 
 [tool.setuptools.packages.find]
 include = ["fuo*"]
