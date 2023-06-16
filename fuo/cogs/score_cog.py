@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from discord.ext import commands
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+import emoji as em
 
 from fuo import config, db, models, utils
 
@@ -17,15 +18,20 @@ _logger = logging.getLogger(__name__)
 
 
 class ScoreCog(commands.Cog, name="score"):
+    DEFAULT_ACTION_SCORE = 1.0
+    DEFAULT_ACTION_COOLDOWN = 0
+    DEFAULT_SYMBOL = "❤️"
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-        self.action_scores: DefaultDict[
+        self._action_scores: DefaultDict[
             models.ScoreSource, DefaultDict[int | Tuple[int, int], float]
-        ] = defaultdict(lambda: defaultdict(lambda: 1.0))
-        self.action_cooldowns: DefaultDict[
+        ] = defaultdict(lambda: defaultdict(lambda: self.DEFAULT_ACTION_SCORE))
+        self._action_cooldowns: DefaultDict[
             models.ScoreSource, DefaultDict[int | Tuple[int, int], int]
-        ] = defaultdict(lambda: defaultdict(lambda: 0))
+        ] = defaultdict(lambda: defaultdict(lambda: self.DEFAULT_ACTION_COOLDOWN))
+        self._symbol: str | None = None
 
     async def _get_action_score(
         self,
@@ -37,7 +43,7 @@ class ScoreCog(commands.Cog, name="score"):
     ) -> float:
         assert sess is not None
 
-        score_config = self.action_scores[score_src]
+        score_config = self._action_scores[score_src]
         if channel_id is None:
             score_key = guild_id
         else:
@@ -87,7 +93,7 @@ class ScoreCog(commands.Cog, name="score"):
     ):
         assert sess is not None
 
-        cooldown_config = self.action_cooldowns[score_src]
+        cooldown_config = self._action_cooldowns[score_src]
         if channel_id is not None:
             key = (guild_id, channel_id)
         else:
@@ -465,6 +471,7 @@ class ScoreCog(commands.Cog, name="score"):
                 score = 0
             else:
                 score = user_score.score
+            symbol = await self._get_symbol(guild_id=member.guild.id, sess=sess)
 
         embed = discord.Embed(
             color=discord.Color.from_str(config.info_color),
@@ -472,7 +479,7 @@ class ScoreCog(commands.Cog, name="score"):
         )
         embed.add_field(name="Member", value=member.mention, inline=True)
         embed.add_field(name="Type", value=score_type.name, inline=True)
-        embed.add_field(name="Score", value=score, inline=True)
+        embed.add_field(name="Score", value=f"{symbol}{score}", inline=True)
         await ctx.send(embed=embed)
 
     @commands.command(
@@ -488,12 +495,15 @@ class ScoreCog(commands.Cog, name="score"):
         score_type: Annotated[models.ScoreType, utils.to_score_type],
         score: float,
     ):
-        await self._add_member_score(
-            guild_id=member.guild.id,
-            member_id=member.id,
-            score=score,
-            score_type=score_type,
-        )
+        async with db.session_scope() as sess:
+            await self._add_member_score(
+                guild_id=member.guild.id,
+                member_id=member.id,
+                score=score,
+                score_type=score_type,
+                sess=sess
+            )
+            symbol = await self._get_symbol(guild_id=member.guild.id, sess=sess)
 
         embed = discord.Embed(
             color=discord.Color.from_str(config.success_color),
@@ -501,7 +511,7 @@ class ScoreCog(commands.Cog, name="score"):
         )
         embed.add_field(name="Member", value=member.mention, inline=True)
         embed.add_field(name="Type", value=score_type.name, inline=True)
-        embed.add_field(name="Score", value=score, inline=True)
+        embed.add_field(name="Score", value=f"{symbol}{score}", inline=True)
         await ctx.send(embed=embed)
 
     async def cog_command_error(self, ctx: commands.Context, error: Exception):
@@ -556,14 +566,15 @@ class ScoreCog(commands.Cog, name="score"):
                     conf.channel_id = channel.id
                 sess.add(conf)
             await sess.commit()
-
+            symbol = await self._get_symbol(guild_id=guild_id, sess=sess)
+            
         # update local score config
         if channel is not None:
             score_key = (guild_id, channel.id)
         else:
             score_key = guild_id
 
-        self.action_scores[score_src][score_key] = score
+        self._action_scores[score_src][score_key] = score
 
         embed = discord.Embed(
             color=discord.Color.from_str(config.success_color),
@@ -574,7 +585,7 @@ class ScoreCog(commands.Cog, name="score"):
             embed.add_field(name="Channel", value=channel.mention, inline=True)
         else:
             embed.add_field(name="Channel", value="All", inline=True)
-        embed.add_field(name="Score", value=score, inline=True)
+        embed.add_field(name="Score", value=f"{symbol}{score}", inline=True)
         await ctx.send(embed=embed)
 
     @commands.command(
@@ -598,6 +609,7 @@ class ScoreCog(commands.Cog, name="score"):
             score = await self._get_action_score(
                 score_src=score_src, guild_id=guild_id, channel_id=channel_id, sess=sess
             )
+            symbol = await self._get_symbol(guild_id=guild_id, sess=sess)
 
         embed = discord.Embed(
             color=discord.Color.from_str(config.info_color),
@@ -608,7 +620,7 @@ class ScoreCog(commands.Cog, name="score"):
             embed.add_field(name="Channel", value=channel.mention, inline=True)
         else:
             embed.add_field(name="Channel", value="All", inline=True)
-        embed.add_field(name="Score", value=score, inline=True)
+        embed.add_field(name="Score", value=f"{symbol}{score}", inline=True)
         await ctx.send(embed=embed)
 
     @commands.command(
@@ -656,7 +668,7 @@ class ScoreCog(commands.Cog, name="score"):
             key = (guild_id, channel.id)
         else:
             key = guild_id
-        self.action_cooldowns[score_src][key] = cooldown
+        self._action_cooldowns[score_src][key] = cooldown
 
         embed = discord.Embed(
             color=discord.Color.from_str(config.success_color),
@@ -703,3 +715,54 @@ class ScoreCog(commands.Cog, name="score"):
             embed.add_field(name="Channel", value="All", inline=True)
         embed.add_field(name="Cooldown", value=cooldown, inline=True)
         await ctx.send(embed=embed)
+
+    @commands.command(
+        name="set-symbol", help="Set the score symbol. The symbol should be a emoji."
+    )
+    @commands.has_role(config.discord_role)
+    async def set_symbol(self, ctx: commands.Context, symbol: str):
+        assert ctx.guild is not None
+        guild_id = ctx.guild.id
+
+        if not em.is_emoji(symbol):
+            raise commands.BadArgument("The symbol is not a emoji.")
+
+        async with db.session_scope() as sess:
+            q = sa.select(models.ScoreSymbol).where(
+                models.ScoreSymbol.guild_id == guild_id
+            )
+            score_symbol = (await sess.execute(q)).scalar_one_or_none()
+            if score_symbol is not None:
+                score_symbol.symbol = symbol
+            else:
+                score_symbol = models.ScoreSymbol(guild_id=guild_id, symbol=symbol)
+                sess.add(score_symbol)
+            await sess.commit()
+
+        # update local symbol cache
+        self._symbol = symbol
+
+        embed = discord.Embed(
+            color=discord.Color.from_str(config.success_color),
+            title="Set symbol successfully.",
+        )
+        embed.add_field(name="Symbol", value=symbol, inline=False)
+        await ctx.send(embed=embed)
+
+    @db.use_session
+    async def _get_symbol(
+        self, guild_id: int, *, sess: AsyncSession | None = None
+    ) -> str:
+        assert sess is not None
+
+        if self._symbol is None:
+            q = sa.select(models.ScoreSymbol).where(models.ScoreSymbol.guild_id == guild_id)
+            score_symbol = (await sess.execute(q)).scalar_one_or_none()
+            if score_symbol is not None:
+                symbol = score_symbol.symbol
+            else:
+                symbol = self.DEFAULT_SYMBOL
+            self._symbol = symbol
+        
+        return self._symbol
+

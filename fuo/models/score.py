@@ -64,3 +64,10 @@ class ScoreLog(Base, BaseMixin):
         sa.Enum(ScoreSource), nullable=False, index=True
     )
     score: Mapped[float] = mapped_column(nullable=False, index=False)
+
+
+class ScoreSymbol(Base, BaseMixin):
+    __tablename__ = "score_symbols"
+
+    guild_id: Mapped[int] = mapped_column(sa.BigInteger, nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(sa.String, nullable=False, index=False)
