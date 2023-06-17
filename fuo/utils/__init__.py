@@ -1,5 +1,11 @@
 from .check import is_bot, is_command
-from .converter import to_channel_type, to_score_source, to_score_type, timestr_to_seconds
+from .converter import (
+    to_channel_type,
+    to_score_source,
+    to_score_type,
+    timestr_to_seconds,
+    seconds_to_timestr,
+)
 from .emoji import is_dislike_emoji, is_like_emoji, is_valid_emoji
 
 __all__ = [
@@ -10,6 +16,7 @@ __all__ = [
     "to_channel_type",
     "to_score_source",
     "timestr_to_seconds",
+    "seconds_to_timestr",
     "is_command",
     "is_bot",
 ]

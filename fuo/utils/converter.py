@@ -47,3 +47,18 @@ def timestr_to_seconds(s: str) -> int:
         res += int(second)
     
     return res
+
+
+def seconds_to_timestr(sec: int) -> str:
+    h = sec // 3600
+    sec -= h * 3600
+    m = sec // 60
+    sec -= m * 60
+
+    res = ""
+    if h > 0:
+        res += f"{h}h"
+    if m > 0:
+        res += f"{m}m"
+    res += f"{sec}s"
+    return res

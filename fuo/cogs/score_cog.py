@@ -636,10 +636,12 @@ class ScoreCog(commands.Cog, name="score"):
         score_src: Annotated[models.ScoreSource, utils.to_score_source],
         channel: Optional[discord.TextChannel] = None,
         *,
-        cooldown: Annotated[int, utils.timestr_to_seconds],
+        cooldown: str,
     ):
         assert ctx.guild is not None
         guild_id = ctx.guild.id
+
+        cooldown_seconds = utils.timestr_to_seconds(cooldown)
 
         async with db.session_scope() as sess:
             q = (
@@ -651,12 +653,12 @@ class ScoreCog(commands.Cog, name="score"):
                 q = q.where(models.ScoreConfig.channel_id == channel.id)
             conf = (await sess.execute(q)).scalar_one_or_none()
             if conf is not None:
-                conf.cooldown = cooldown
+                conf.cooldown = cooldown_seconds
             else:
                 conf = models.ScoreConfig(
                     guild_id=guild_id,
                     score_src=score_src,
-                    cooldown=cooldown,
+                    cooldown=cooldown_seconds,
                 )
                 if channel is not None:
                     conf.channel_id = channel.id
@@ -668,7 +670,7 @@ class ScoreCog(commands.Cog, name="score"):
             key = (guild_id, channel.id)
         else:
             key = guild_id
-        self._action_cooldowns[score_src][key] = cooldown
+        self._action_cooldowns[score_src][key] = cooldown_seconds
 
         embed = discord.Embed(
             color=discord.Color.from_str(config.success_color),
@@ -713,7 +715,7 @@ class ScoreCog(commands.Cog, name="score"):
             embed.add_field(name="Channel", value=channel.mention, inline=True)
         else:
             embed.add_field(name="Channel", value="All", inline=True)
-        embed.add_field(name="Cooldown", value=cooldown, inline=True)
+        embed.add_field(name="Cooldown", value=utils.seconds_to_timestr(cooldown), inline=True)
         await ctx.send(embed=embed)
 
     @commands.command(
