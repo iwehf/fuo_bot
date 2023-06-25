@@ -28,18 +28,23 @@ class QuestionMissing(commands.CommandError):
     pass
 
 
-def question_summary(guild: discord.Guild, question: models.Question) -> discord.Embed:
+async def question_summary(guild: discord.Guild, question: models.Question) -> discord.Embed:
     rows = []
     for answer in question.answers:
         member = guild.get_member(answer.member_id)
-        if member is not None:
-            rows.append(
-                {
-                    "name": member.name,
-                    "like": answer.like,
-                    "dislike": answer.dislike,
-                }
-            )
+        if member is None:
+            try:
+                member = await guild.fetch_member(answer.member_id)
+            except discord.errors.NotFound:
+                continue
+
+        rows.append(
+            {
+                "name": member.name,
+                "like": answer.like,
+                "dislike": answer.dislike,
+            }
+        )
 
     table = tabulate(rows, headers="keys", tablefmt="pretty")
 
@@ -239,7 +244,7 @@ class QuestionCog(commands.Cog, name="question"):
             await sess.refresh(question, ["answers"])
             question.answers.sort(key=lambda answer: answer.like, reverse=True)
 
-            summary = question_summary(ctx.guild, question)
+            summary = await question_summary(ctx.guild, question)
 
             question.opened = False
 
