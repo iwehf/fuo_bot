@@ -62,7 +62,7 @@ class ChannelCog(commands.Cog, name="channel"):
             channel_conf = (await sess.execute(q)).scalar_one_or_none()
             if channel_conf is not None:
                 raise ChannelTypeExists(
-                    channel_name=channel.name, channel_type=channel_type
+                    channel_name=channel.name, channel_type=channel_conf.channel_type
                 )
 
             if self._is_unique_channel(channel_type):
