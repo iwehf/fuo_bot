@@ -168,7 +168,6 @@ class QuestionCog(commands.Cog, name="question"):
             )
 
             question = (await sess.execute(q)).scalars().first()
-            _logger.debug(f"question: {question}")
             if question is None:
                 raise QuestionMissing
             if not question.opened:
