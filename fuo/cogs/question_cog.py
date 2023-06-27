@@ -181,6 +181,7 @@ class QuestionCog(commands.Cog, name="question"):
                 question_id=question.id,
                 message_id=ctx.message.id,
             )
+            models.question = question
             sess.add(answer)
             await sess.commit()
 
