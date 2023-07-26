@@ -19,6 +19,10 @@ _discord: Dict[str, Any] = _c.get("discord")
 discord_token: str = _discord.get("token", "")
 discord_role: str = _discord.get("role", "")
 
+_app = _c.get("app")
+app_host: str = _app.get("host", "0.0.0.0")
+app_port: int = _app.get("port", 8080)
+
 info_color = "#03a8f4"
 success_color = "#66bb6a"
 error_color = "#e50113"

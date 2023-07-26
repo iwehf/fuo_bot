@@ -14,15 +14,14 @@ intents.message_content = True
 intents.members = True
 intents.reactions = True
 
-bot = commands.Bot(command_prefix="%", intents=intents)
-
+bot = commands.Bot(command_prefix="%", intents=intents, proxy="http://192.168.224.1:10081")
 
 @bot.event
 async def on_ready():
     _logger.info(f"bot is ready!")
 
 
-async def _run():
+async def run_bot():
     log.init()
     await db.init()
     try:
@@ -35,12 +34,7 @@ async def _run():
             await bot.add_cog(cogs.ChatCog(bot))
 
             await bot.start(config.discord_token)
-    finally:
-        await db.close()
-
-
-def run_bot():
-    try:
-        asyncio.run(_run())
     except KeyboardInterrupt:
         pass
+    finally:
+        await db.close()

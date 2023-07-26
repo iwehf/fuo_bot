@@ -1,4 +1,4 @@
-from enum import IntEnum
+from enum import Enum
 from typing import Optional
 
 import sqlalchemy as sa
@@ -9,10 +9,10 @@ from fuo.db import Base
 from .base import BaseMixin
 
 
-class ScoreType(IntEnum):
-    POST = 0
-    QUESTION = 1
-    CHAT = 2
+class ScoreType(str, Enum):
+    POST = "post"
+    QUESTION = "question"
+    CHAT = "chat"
 
 
 class UserScore(Base, BaseMixin):
@@ -26,14 +26,14 @@ class UserScore(Base, BaseMixin):
     score: Mapped[float] = mapped_column(nullable=False, index=False, default=0)
 
 
-class ScoreSource(IntEnum):
-    POST = 0
-    POST_REACTION = 1
-    QUESTION = 2
-    ANSWER = 3
-    ANSWER_REACTION = 4
-    CHAT = 5
-    CHAT_REACTION = 6
+class ScoreSource(str, Enum):
+    POST = "post"
+    POST_REACTION = "post_reaction"
+    QUESTION = "question"
+    ANSWER = "answer"
+    ANSWER_REACTION = "answer_reaction"
+    CHAT = "chat"
+    CHAT_REACTION = "chat_reaction"
 
 
 class ScoreConfig(Base, BaseMixin):
@@ -59,7 +59,7 @@ class ScoreLog(Base, BaseMixin):
     guild_id: Mapped[int] = mapped_column(sa.BigInteger, nullable=False, index=True)
     channel_id: Mapped[int] = mapped_column(sa.BigInteger, nullable=False, index=True)
     member_id: Mapped[int] = mapped_column(sa.BigInteger, nullable=False, index=True)
-    
+
     score_src: Mapped[ScoreSource] = mapped_column(
         sa.Enum(ScoreSource), nullable=False, index=True
     )

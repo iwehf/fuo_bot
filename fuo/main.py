@@ -1,8 +1,8 @@
 import argparse
 from typing import Optional, Sequence
 
-from fuo.bot import run_bot
 from fuo.migrations import run_migrations
+from fuo.run import run
 
 
 def main(input_args: Optional[Sequence[str]] = None):
@@ -16,6 +16,6 @@ def main(input_args: Optional[Sequence[str]] = None):
     )
     args = parser.parse_args(input_args)
     if args.action == "run":
-        run_bot()
+        run()
     elif args.action == "migrate":
         run_migrations()
