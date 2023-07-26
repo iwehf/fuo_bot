@@ -19,3 +19,7 @@ def main(input_args: Optional[Sequence[str]] = None):
         run()
     elif args.action == "migrate":
         run_migrations()
+
+
+if __name__ == "__main__":
+    main(["run"])
