@@ -4,26 +4,25 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fuo"
-authors = [
-    {name = "iwehf", email = "mh739025250@gmail.com"},
-]
+authors = [{ name = "iwehf", email = "mh739025250@gmail.com" }]
 description = "Fuo discord bot"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {file = "LICENSE"}
-classifiers = [
-    "Programming Language :: Python :: 3",
-]
+license = { file = "LICENSE" }
+classifiers = ["Programming Language :: Python :: 3"]
 dependencies = [
-    "discord~=2.2.3",
+    "discord==2.2.3",
     "SQLAlchemy==2.0.13",
-    "tabulate~=0.9.0",
-    "PyYAML~=6.0",
-    "emoji~=2.2.0",
-    "aiomysql~=0.1.1",
-    "alembic~=1.11.1"
+    "tabulate==0.9.0",
+    "PyYAML==6.0",
+    "emoji==2.2.0",
+    "aiomysql==0.1.1",
+    "alembic==1.11.1",
+    "fastapi==0.98.0",
+    "hypercorn==0.14.3",
+    "anyio==3.7.0",
 ]
-version = "0.1.4"
+version = "0.2.0"
 
 [tool.setuptools.packages.find]
 include = ["fuo*"]
