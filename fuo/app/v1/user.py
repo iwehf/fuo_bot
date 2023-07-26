@@ -34,17 +34,17 @@ async def get_user_score(
     sess: Annotated[AsyncSession, Depends(db.get_session)],
 ) -> UserScore:
     q = sa.select(
-        models.UserScore.member_id, sa.func.sum(models.UserScore.score).alias("sum")
+        models.UserScore.member_id, sa.func.sum(models.UserScore.score).label("sum")
     ).where(models.UserScore.member_id == user.id)
     if type is not None:
         q = q.where(models.UserScore.score_type == type)
     q = q.group_by(models.UserScore.member_id)
 
-    res = (await sess.execute(q)).scalars().first()
+    res = (await sess.execute(q)).first()
     if res is None:
         return UserScore(score=0)
 
-    return UserScore(score=res.sum)
+    return UserScore(score=res[1])
 
 
 class UserScoreLog(BaseModel):
