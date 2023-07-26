@@ -14,7 +14,7 @@ intents.message_content = True
 intents.members = True
 intents.reactions = True
 
-bot = commands.Bot(command_prefix="%", intents=intents, proxy="http://192.168.224.1:10081")
+bot = commands.Bot(command_prefix="%", intents=intents)
 
 @bot.event
 async def on_ready():
