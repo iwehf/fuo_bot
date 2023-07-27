@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 import yaml
 
@@ -22,6 +22,7 @@ discord_role: str = _discord.get("role", "")
 _app = _c.get("app")
 app_host: str = _app.get("host", "0.0.0.0")
 app_port: int = _app.get("port", 8080)
+allow_origins: List[str] = _app.get("allow_origins", ["*"])
 
 info_color = "#03a8f4"
 success_color = "#66bb6a"

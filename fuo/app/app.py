@@ -7,6 +7,7 @@ from hypercorn.asyncio import serve
 from hypercorn.config import Config
 
 from .v1 import router as V1Router
+from .cors import enable_cors
 
 description = """
 User data api for FUO bot.
@@ -21,6 +22,7 @@ User data api for FUO bot.
 app = FastAPI(title="FUO Bot API", description=description)
 
 app.include_router(V1Router)
+enable_cors(app=app)
 
 
 async def run_app(host: str, port: int):
