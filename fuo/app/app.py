@@ -1,4 +1,3 @@
-import signal
 from functools import partial
 
 import anyio
@@ -6,8 +5,8 @@ from fastapi import FastAPI
 from hypercorn.asyncio import serve
 from hypercorn.config import Config
 
-from .v1 import router as V1Router
 from .cors import enable_cors
+from .v1 import router as V1Router
 
 description = """
 User data api for FUO bot.
@@ -19,28 +18,25 @@ User data api for FUO bot.
 * **Get user score logs**: Get score incoming logs of the user. Path `/v1/user/{user_id}/score/logs`
 """
 
-app = FastAPI(title="FUO Bot API", description=description)
-
-app.include_router(V1Router)
-enable_cors(app=app)
 
 
-async def run_app(host: str, port: int):
-    config = Config()
-    config.bind = [f"{host}:{port}"]
-    config.accesslog = "-"
-    config.errorlog = "-"
+class App(object):
+    def __init__(self) -> None:
+        self._app = FastAPI(title="FUO Bot API", description=description)
+        self._app.include_router(V1Router)
+        enable_cors(app=self._app)
 
-    shutdown_event = anyio.Event()
+        self._shutdown_event = anyio.Event()
 
-    async def signal_handler():
-        with anyio.open_signal_receiver(signal.SIGINT, signal.SIGTERM) as signals:
-            async for _ in signals:
-                shutdown_event.set()
-                return
+    async def run(self, host: str, port: int):
+        config = Config()
+        config.bind = [f"{host}:{port}"]
+        config.accesslog = "-"
+        config.errorlog = "-"
 
-    async with anyio.create_task_group() as tg:
-        tg.start_soon(signal_handler)
+        async with anyio.create_task_group() as tg:
+            serve_func = partial(serve, self._app, config, shutdown_trigger=self._shutdown_event.wait)  # type: ignore
+            tg.start_soon(serve_func)
 
-        serve_func = partial(serve, app, config, shutdown_trigger=shutdown_event.wait)  # type: ignore
-        tg.start_soon(serve_func)
+    def stop(self):
+        self._shutdown_event.set()
