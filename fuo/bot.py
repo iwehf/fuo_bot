@@ -3,7 +3,7 @@ import logging
 import discord
 from discord.ext import commands
 
-from fuo import cogs, config, db, log
+from fuo import cogs, config
 
 _logger = logging.getLogger(__name__)
 
@@ -21,8 +21,6 @@ async def on_ready():
 
 
 async def run_bot():
-    log.init()
-    await db.init()
     try:
         async with bot:
             await bot.add_cog(cogs.RoleCog(bot))
@@ -35,5 +33,3 @@ async def run_bot():
             await bot.start(config.discord_token)
     except KeyboardInterrupt:
         pass
-    finally:
-        await db.close()
